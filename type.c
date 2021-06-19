@@ -1,9 +1,10 @@
 #include <windows.h>
 
-#define OUTPUT(out, wbuf, cbuf) \
-        ( WriteConsoleW((out), (wbuf), wcslen((wbuf)), NULL, NULL) \
-        || WideCharToMultiByte(CP_OEMCP, 0, (wbuf), -1, (cbuf), sizeof (cbuf), NULL, NULL) \
-        && WriteFile((out), (cbuf), strlen((cbuf)), NULL, NULL) ); \
+#define OUTPUT(out, wbuf, cbuf, pbcount) \
+        if (!WriteConsoleW((out), (wbuf), wcslen((wbuf)), (pbcount), NULL)) { \
+            WideCharToMultiByte(CP_OEMCP, 0, (wbuf), -1, (cbuf), sizeof (cbuf), NULL, NULL); \
+            WriteFile((out), (cbuf), strlen((cbuf)), (pbcount), NULL); \
+        } \
         FlushFileBuffers((out))
 
 int main() {
@@ -19,7 +20,7 @@ int main() {
 
     /* No arguments */
     if (argcw < 2) {
-        OUTPUT(hStdErr, L"The syntax of the command is incorrect.\r\n", cbuffer);
+        OUTPUT(hStdErr, L"The syntax of the command is incorrect.\r\n", cbuffer, &dwByteCount);
         return 1;
     }
 
@@ -27,7 +28,7 @@ int main() {
     for (i = 1; i < argcw; i++) {
         if (argvw[i][0] == '/' && argvw[i][1] == '?') {
             OUTPUT(hStdOut, L"Displays the contents of a text file or files.\r\n\r\n"
-                            L"TYPE [drive:][path]filename\r\n", cbuffer);
+                            L"TYPE [drive:][path]filename\r\n", cbuffer, &dwByteCount);
             return 1;
         }
     }
@@ -35,7 +36,7 @@ int main() {
     /* Bogus switches */
     for (i = 1; i < argcw; i++) {
         if (argvw[i][0] == '/') {
-            OUTPUT(hStdErr, L"The syntax of the command is incorrect.\r\n", cbuffer);
+            OUTPUT(hStdErr, L"The syntax of the command is incorrect.\r\n", cbuffer, &dwByteCount);
             return 1;
         }
     }
@@ -52,21 +53,21 @@ int main() {
                                  FILE_ATTRIBUTE_NORMAL,
                                  NULL)
                 ) == INVALID_HANDLE_VALUE) {
-            OUTPUT(hStdErr, L"The system cannot find the file specified.\r\n", cbuffer);
+            OUTPUT(hStdErr, L"The system cannot find the file specified.\r\n", cbuffer, &dwByteCount);
             /* Specify file when multiple passed in */
             if (argcw > 2) {
-                OUTPUT(hStdErr, L"Error occurred while processing: ", cbuffer);
-                OUTPUT(hStdErr, argvw[i], cbuffer);
-                OUTPUT(hStdErr, L".\r\n", cbuffer);
+                OUTPUT(hStdErr, L"Error occurred while processing: ", cbuffer, &dwByteCount);
+                OUTPUT(hStdErr, argvw[i], cbuffer, &dwByteCount);
+                OUTPUT(hStdErr, L".\r\n", cbuffer, &dwByteCount);
             }
             continue;
         }
 
         /* Display filename, and blank lines, when there's multiple files */
         if (argcw > 2) {
-            OUTPUT(hStdErr, L"\r\n", cbuffer);
-            OUTPUT(hStdErr, argvw[i], cbuffer);
-            OUTPUT(hStdErr, L"\r\n\r\n\r\n", cbuffer);
+            OUTPUT(hStdErr, L"\r\n", cbuffer, &dwByteCount);
+            OUTPUT(hStdErr, argvw[i], cbuffer, &dwByteCount);
+            OUTPUT(hStdErr, L"\r\n\r\n\r\n", cbuffer, &dwByteCount);
         }
 
         /* Check byte-order mark for UTF-16 [little-endian] encoding */
@@ -74,7 +75,7 @@ int main() {
         /* UTF16le encoding ? */
         if (wbuffer[0] == 0xFEFF) {
             while ((ReadFile(hFile, wbuffer, sizeof wbuffer/2, &dwByteCount, NULL), dwByteCount)) {
-                OUTPUT(hStdOut, wbuffer, cbuffer);
+                OUTPUT(hStdOut, wbuffer, cbuffer, &dwByteCount);
             }
 
         /* ASCII encoding ? */
